@@ -1,6 +1,6 @@
-# Python Udemy — learning workspace
+# Python Udemy - learning workspace
 
-Personal sandbox for Python and AI course exercises: small scripts, a RAG demo over PDFs, API snippets, and simple agents. Dependencies are pinned in the root `requirements.txt`.
+Personal sandbox for Python and AI course exercises: small scripts, a RAG demo over PDFs, async RAG via a queue worker, API snippets, and simple agents. Dependencies are pinned in the root `requirements.txt`.
 
 ## Requirements
 
@@ -24,6 +24,7 @@ Create `.env` files next to the scripts that need secrets (see each section belo
 | Path | What it is |
 |------|------------|
 | [`rag_learn/`](rag_learn/) | End-to-end RAG: chunk `sample.pdf`, embed with Gemini, store in Qdrant, answer questions with context + page hints. |
+| [`rag_queue/`](rag_queue/) | Queue-based RAG API: FastAPI enqueues prompts, RQ worker processes jobs, Redis/Valkey is used as queue backend. |
 | [`Weather_Agent/`](Weather_Agent/) | Minimal Gemini chat CLI and a separate tool-using agent (weather + shell) backed by GitHub Models inference. |
 | [`AI_course/`](AI_course/) | FastAPI and related small examples (e.g. Ollama client usage). |
 | [`00_/`](00_/) | Short standalone Python exercises. |
@@ -69,6 +70,58 @@ To use a different PDF, change `pdf_path` in `index.py` and re-run indexing.
 
 ---
 
+## Queue-based RAG API (`rag_queue/`)
+
+This folder runs the same retrieval + Gemini answering flow behind a queue:
+
+- `server.py`: FastAPI app with:
+  - `POST /chat` -> enqueues a job and returns a `job_id`
+  - `GET /job_status?job_id=...` -> returns queued/running/completed/failed
+- `queues/worker.py`: RQ worker task (`process_query`) that:
+  - retrieves similar chunks from Qdrant (`learning_rag`)
+  - calls Gemini (`gemini-2.5-flash`) with context + page metadata
+  - stores output as job result
+- `client/rq_client.py`: Redis connection + shared RQ queue object
+- `docker-compose.yml`: local Valkey service on port `6379`
+
+### Prerequisites
+
+- Qdrant running on `http://localhost:6333` (from `rag_learn/docker-compose.yml`).
+- Valkey/Redis running on `localhost:6379` (from `rag_queue/docker-compose.yml`).
+- `GOOGLE_API_KEY` set in `rag_queue/.env` (or exported in shell).
+
+### Run
+
+From repo root:
+
+```bash
+# terminal 1
+cd rag_queue
+docker compose up -d
+
+# terminal 2
+cd rag_queue
+rq worker --with-scheduler
+
+# terminal 3
+cd rag_queue
+python main.py
+```
+
+### Test with curl
+
+```bash
+# enqueue
+curl -X POST "http://localhost:8000/chat?query=Summarize%20page%201"
+
+# check status
+curl "http://localhost:8000/job_status?job_id=<job_id>"
+```
+
+The second call returns the generated answer in `result` once the worker finishes.
+
+---
+
 ## Weather agent (`Weather_Agent/`)
 
 **`weather_agent.py`** — simple REPL that sends prompts to Gemini (`gemini-3-flash-preview`) using the same OpenAI-compatible base URL as `rag_learn/chat.py`.
@@ -93,3 +146,5 @@ Examples such as a minimal FastAPI app (`fast_api.py`). Extra packages (for exam
 This is a personal learning repository. Third-party services (Google AI, Qdrant, GitHub Models, wttr.in) have their own terms and rate limits.
 
 If you add new exercises, prefer a short folder name and a one-line comment or docstring at the top of each script describing how to run it and which env vars it expects.
+
+If credentials were accidentally committed in any local `.env`, rotate them immediately and replace with placeholders before sharing the repository.
