@@ -2,8 +2,6 @@ import os
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
-
-# 1. Using the native SDK! NO OPENAI IMPORTS.
 from google import genai 
 
 load_dotenv()
