@@ -1,6 +1,6 @@
 # Python Udemy - learning workspace
 
-Personal sandbox for Python and AI course exercises: small scripts, a RAG demo over PDFs, async RAG via a queue worker, API snippets, and simple agents. Dependencies are pinned in the root `requirements.txt`.
+Personal sandbox for Python and AI course exercises: small scripts, RAG demos, queue-based async processing, LangGraph experiments, memory-enabled assistants, and voice agents. Dependencies are pinned in the root `requirements.txt`.
 
 ## Requirements
 
@@ -25,6 +25,9 @@ Create `.env` files next to the scripts that need secrets (see each section belo
 |------|------------|
 | [`rag_learn/`](rag_learn/) | End-to-end RAG: chunk `sample.pdf`, embed with Gemini, store in Qdrant, answer questions with context + page hints. |
 | [`rag_queue/`](rag_queue/) | Queue-based RAG API: FastAPI enqueues prompts, RQ worker processes jobs, Redis/Valkey is used as queue backend. |
+| [`langraph_learn/`](langraph_learn/) | LangGraph basics: typed state, nodes/edges, simple chat graph, and a MongoDB checkpointer example. |
+| [`mem_agent/`](mem_agent/) | Mem0-based memory assistant using Qdrant + Neo4j for recall and relationship extraction. |
+| [`voice_agent/`](voice_agent/) | Speech-to-text + LLM + text-to-speech loops, including a tool-calling voice assistant. |
 | [`Weather_Agent/`](Weather_Agent/) | Minimal Gemini chat CLI and a separate tool-using agent (weather + shell) backed by GitHub Models inference. |
 | [`AI_course/`](AI_course/) | FastAPI and related small examples (e.g. Ollama client usage). |
 | [`00_/`](00_/) | Short standalone Python exercises. |
@@ -132,6 +135,104 @@ The second call returns the generated answer in `result` once the worker finishe
 
 - **Env:** `GITHUB_TOKEN` for `https://models.inference.ai.azure.com` (GitHub Models).
 - **Warning:** `run_cmd` can run arbitrary shell commands; only use in a trusted environment.
+
+---
+
+## LangGraph experiments (`langraph_learn/`)
+
+This folder contains small graph-first experiments:
+
+- `chat.py`: basic `StateGraph` flow with two nodes (`chatbot` -> `sampleNode`) and terminal execution.
+- `chat_copy.py`: graph execution with MongoDB checkpointing via `MongoDBSaver`.
+- `docker-compose.yml`: local MongoDB service used by the checkpointer example.
+
+### Run
+
+```bash
+cd langraph_learn
+python chat.py
+```
+
+For checkpointing flow:
+
+```bash
+cd langraph_learn
+docker compose up -d
+python chat_copy.py
+```
+
+### Environment
+
+- `GITHUB_TOKEN` (or another provider token based on your chosen model/provider setup).
+- Any keys referenced by your selected model/provider configuration.
+
+---
+
+## Memory agent (`mem_agent/`)
+
+`mem_agent/mem.py` implements a memory loop with `mem0`:
+
+- retrieves related memories from Qdrant
+- enriches prompts with recalled context
+- generates responses with Gemini
+- stores each new interaction back into memory
+- uses Neo4j as graph store for relationship-aware memory
+
+`mem_agent/test_graph.py` is a focused test that checks graph extraction/write behavior on a sample prompt.
+
+### Services required
+
+- Qdrant on `localhost:6333` (see `mem_agent/docker-compose.yml`).
+- Neo4j reachable via `NEO4J_URI`.
+
+### Run
+
+```bash
+cd mem_agent
+docker compose up -d   # starts Qdrant
+python mem.py
+```
+
+### Environment
+
+- `GOOGLE_API_KEY`
+- `NEO4J_URI`
+- `NEO4J_USERNAME`
+- `NEO4J_PASSWORD`
+- `GITHUB_TOKEN` (used by `test_graph.py`)
+
+---
+
+## Voice agents (`voice_agent/`)
+
+This folder has two voice-first scripts:
+
+- `main.py`: microphone input -> Google STT -> LLM response -> Edge TTS playback.
+- `cursor.py`: tool-calling voice assistant with structured steps (`PLAN`, `TOOL`, `OUTPUT`) plus TTS playback.
+
+### Run
+
+```bash
+cd voice_agent
+python main.py
+```
+
+or:
+
+```bash
+cd voice_agent
+python cursor.py
+```
+
+### Environment
+
+- `GITHUB_TOKEN` for GitHub Models endpoint (`https://models.inference.ai.azure.com`).
+
+### Notes
+
+- Requires microphone/audio device access.
+- Uses `speech_recognition` (Google STT), `edge-tts`, and `pygame` for playback.
+- `cursor.py` includes `run_cmd`; treat it as high-trust local execution only.
 
 ---
 
